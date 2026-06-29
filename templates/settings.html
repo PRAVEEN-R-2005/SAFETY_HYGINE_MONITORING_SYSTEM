@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Safety & Hygiene AI System{% endblock %}
+{% block header_title %}System Customizations{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('settings_view') }}" class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 24px; align-items: flex-start;">
+    <!-- Detection & General Settings -->
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+        <div class="panel" style="margin-bottom: 0;">
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                <i class="fa-solid fa-brain" style="color: var(--primary)"></i> AI Inference Settings
+            </h3>
+            
+            <div class="form-group">
+                <label class="form-label" for="confidence_threshold">Detection Confidence Threshold (<span id="conf-val">{{ "%.0f"|format(settings.confidence_threshold * 100) }}</span>%)</label>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <input type="range" class="form-input" style="flex: 1; padding: 0; cursor: pointer;" id="confidence_threshold" name="confidence_threshold" min="0.2" max="0.9" step="0.05" value="{{ settings.confidence_threshold }}" oninput="document.getElementById('conf-val').textContent = Math.round(this.value * 100)">
+                </div>
+                <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;">
+                    Higher values reduce false alerts but might miss quickly occluded PPE. Recommended: <b>45%</b>.
+                </span>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="violation_cooldown">Alert Incident Cooldown (Seconds)</label>
+                <input type="number" class="form-input" id="violation_cooldown" name="violation_cooldown" value="{{ settings.violation_cooldown_seconds }}" required>
+                <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;">
+                    Prevents spamming the database with alerts for the same worker ID/violation (e.g., 300s = 5 minutes).
+                </span>
+            </div>
+        </div>
+
+        <div class="panel" style="margin-bottom: 0;">
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                <i class="fa-solid fa-volume-high" style="color: var(--warning)"></i> Notification Triggers
+            </h3>
+            
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <h4 style="font-size: 13px; font-weight: 600;">Browser Audio Alarm</h4>
+                        <p style="font-size: 11px; color: var(--text-secondary);">Plays siren sound on detection screen</p>
+                    </div>
+                    <input type="checkbox" name="sound_alerts" value="true" {% if settings.sound_alerts_enabled %}checked{% endif %} style="width: 20px; height: 20px; cursor: pointer;">
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <h4 style="font-size: 13px; font-weight: 600;">Dashboard Popups</h4>
+                        <p style="font-size: 11px; color: var(--text-secondary);">Display floating notification toast alerts</p>
+                    </div>
+                    <input type="checkbox" name="popup_alerts" value="true" {% if settings.popup_alerts_enabled %}checked{% endif %} style="width: 20px; height: 20px; cursor: pointer;">
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <h4 style="font-size: 13px; font-weight: 600;">SMTP Email Alerts</h4>
+                        <p style="font-size: 11px; color: var(--text-secondary);">Send email with violation screenshot attached</p>
+                    </div>
+                    <input type="checkbox" name="email_alerts" value="true" {% if settings.email_alerts_enabled %}checked{% endif %} style="width: 20px; height: 20px; cursor: pointer;">
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <h4 style="font-size: 13px; font-weight: 600;">WhatsApp Notifications</h4>
+                        <p style="font-size: 11px; color: var(--text-secondary);">Send notifications via Twilio WhatsApp API</p>
+                    </div>
+                    <input type="checkbox" name="whatsapp_alerts" value="true" {% if settings.whatsapp_alerts_enabled %}checked{% endif %} style="width: 20px; height: 20px; cursor: pointer;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Destinations & SMTP Settings -->
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+        <div class="panel" style="margin-bottom: 0;">
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                <i class="fa-solid fa-envelope" style="color: #60a5fa"></i> SMTP Mail Server
+            </h3>
+            
+            <div class="form-group">
+                <label class="form-label" for="smtp_server">SMTP Server Host</label>
+                <input class="form-input" type="text" id="smtp_server" name="smtp_server" value="{{ settings.smtp_server }}" placeholder="e.g. smtp.gmail.com">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="smtp_port">SMTP Port</label>
+                <input class="form-input" type="number" id="smtp_port" name="smtp_port" value="{{ settings.smtp_port }}" placeholder="e.g. 587 or 465">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="smtp_user">SMTP Auth User / Email</label>
+                <input class="form-input" type="email" id="smtp_user" name="smtp_user" value="{{ settings.smtp_user }}" placeholder="e.g. workspace@gmail.com">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="smtp_pass">SMTP Password</label>
+                <input class="form-input" type="password" id="smtp_pass" name="smtp_pass" value="{{ settings.smtp_pass }}" placeholder="Enter SMTP password">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="alert_email_to">Recipient Alerts Email</label>
+                <input class="form-input" type="email" id="alert_email_to" name="alert_email_to" value="{{ settings.alert_email_to }}" placeholder="e.g. safetymanager@company.com">
+            </div>
+        </div>
+
+        <div class="panel" style="margin-bottom: 0;">
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                <i class="fa-brands fa-whatsapp" style="color: var(--success)"></i> Twilio WhatsApp Integration
+            </h3>
+            
+            <div class="form-group">
+                <label class="form-label" for="twilio_sid">Twilio Account SID</label>
+                <input class="form-input" type="text" id="twilio_sid" name="twilio_sid" value="{{ settings.twilio_sid }}" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxx">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="twilio_token">Twilio Auth Token</label>
+                <input class="form-input" type="password" id="twilio_token" name="twilio_token" value="{{ settings.twilio_token }}" placeholder="Auth token string">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="twilio_from">WhatsApp Sender Number (Twilio)</label>
+                <input class="form-input" type="text" id="twilio_from" name="twilio_from" value="{{ settings.twilio_from }}" placeholder="whatsapp:+14155238886">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="whatsapp_to">WhatsApp Recipient Number</label>
+                <input class="form-input" type="text" id="whatsapp_to" name="whatsapp_to" value="{{ settings.whatsapp_to }}" placeholder="whatsapp:+919876543210">
+            </div>
+        </div>
+
+        <!-- Global Save Button -->
+        <button class="btn btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 15px; border-radius: 12px;" type="submit">
+            <i class="fa-solid fa-circle-check"></i> Save System Configurations
+        </button>
+    </div>
+</form>
+{% endblock %}

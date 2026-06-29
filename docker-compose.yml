@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: safety_monitoring_web
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=prod-safety-hygiene-super-secret-98765
+      # SQLite database will persist inside the database volume
+    volumes:
+      - ./database:/app/database
+      - ./static/screenshots:/app/static/screenshots
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    restart: unless-stopped

@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Safety & Hygiene AI System{% endblock %}
+{% block header_title %}Workplace Safety Analytics{% endblock %}
+
+{% block content %}
+<!-- KPI Cards -->
+<div class="dashboard-grid">
+    <div class="stat-card">
+        <div class="stat-details">
+            <h3>Active Workers</h3>
+            <p id="worker-count">{{ stats.worker_count }}</p>
+        </div>
+        <div class="stat-icon primary">
+            <i class="fa-solid fa-users"></i>
+        </div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-details">
+            <h3>PPE Compliance Rate</h3>
+            <p id="compliance-rate">{{ "%.1f"|format(stats.compliance_rate) }}%</p>
+        </div>
+        <div class="stat-icon success">
+            <i class="fa-solid fa-shield-halved"></i>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-details">
+            <h3>Violations Today</h3>
+            <p id="violations-count">{{ stats.violations_today }}</p>
+        </div>
+        <div class="stat-icon danger">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-details">
+            <h3>Active Feeds</h3>
+            <p>{{ stats.active_cameras }}</p>
+        </div>
+        <div class="stat-icon warning">
+            <i class="fa-solid fa-video"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Environmental Safety Alarms -->
+<div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+    <div class="panel" style="padding: 16px; margin-bottom: 0; display: flex; align-items: center; justify-content: space-between; border-left: 5px solid {% if stats.fire_alert %}var(--danger){% else %}var(--success){% endif %};">
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <div style="font-size: 24px; color: {% if stats.fire_alert %}var(--danger){% else %}var(--text-muted){% endif %}">
+                <i class="fa-solid fa-fire"></i>
+            </div>
+            <div>
+                <h4 style="font-size: 15px; font-weight: 700;">Fire Threat Status</h4>
+                <p style="font-size: 12px; color: var(--text-secondary);">{% if stats.fire_alert %}EMERGENCY: Fire detected in workshop!{% else %}Normal - No fire detected{% endif %}</p>
+            </div>
+        </div>
+        <span class="badge {% if stats.fire_alert %}badge-danger{% else %}badge-success{% endif %}">
+            {% if stats.fire_alert %}Active{% else %}Safe{% endif %}
+        </span>
+    </div>
+
+    <div class="panel" style="padding: 16px; margin-bottom: 0; display: flex; align-items: center; justify-content: space-between; border-left: 5px solid {% if stats.smoke_alert %}var(--danger){% else %}var(--success){% endif %};">
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <div style="font-size: 24px; color: {% if stats.smoke_alert %}var(--danger){% else %}var(--text-muted){% endif %}">
+                <i class="fa-solid fa-smog"></i>
+            </div>
+            <div>
+                <h4 style="font-size: 15px; font-weight: 700;">Smoke Threat Status</h4>
+                <p style="font-size: 12px; color: var(--text-secondary);">{% if stats.smoke_alert %}WARNING: Smoke levels exceeding threshold!{% else %}Normal - Air clean{% endif %}</p>
+            </div>
+        </div>
+        <span class="badge {% if stats.smoke_alert %}badge-danger{% else %}badge-success{% endif %}">
+            {% if stats.smoke_alert %}Active{% else %}Safe{% endif %}
+        </span>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="dashboard-grid" style="grid-template-columns: 2fr 1fr; gap: 24px;">
+    <!-- Line & Bar Chart -->
+    <div class="panel" style="margin-bottom: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="font-size: 16px; font-weight: 700;">Safety Compliance & Incident Trends</h3>
+            <span style="font-size: 12px; color: var(--text-muted);">Weekly analysis</span>
+        </div>
+        <div style="height: 320px; position: relative;">
+            <canvas id="incidentChart"></canvas>
+        </div>
+    </div>
+    
+    <!-- Doughnut Chart -->
+    <div class="panel" style="margin-bottom: 0;">
+        <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 20px;">Violation Categories</h3>
+        <div style="height: 220px; position: relative; display: flex; align-items: center; justify-content: center;">
+            <canvas id="categoryChart"></canvas>
+        </div>
+        <div id="no-violations-msg" style="display: none; text-align: center; color: var(--text-muted); font-size: 13px; margin-top: 20px;">
+            No violations recorded today.
+        </div>
+    </div>
+</div>
+
+<div class="panel" style="margin-top: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="font-size: 16px; font-weight: 700;">Recent Violations Logs</h3>
+        <a href="{{ url_for('violations_list') }}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">View All logs</a>
+    </div>
+    
+    <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-weight: 600;">
+                    <th style="padding: 12px;">Evidence</th>
+                    <th style="padding: 12px;">Timestamp</th>
+                    <th style="padding: 12px;">Camera Feed</th>
+                    <th style="padding: 12px;">Violation Type</th>
+                    <th style="padding: 12px;">Confidence</th>
+                    <th style="padding: 12px;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for violation in recent_violations %}
+                <tr style="border-bottom: 1px solid var(--border-color); vertical-align: middle;">
+                    <td style="padding: 12px;">
+                        {% if violation.screenshot_path %}
+                        <img src="/static/screenshots/{{ violation.screenshot_path.split('/')[-1].split('\\')[-1] }}" style="width: 60px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border-color);" alt="Evidence">
+                        {% else %}
+                        <div style="width: 60px; height: 40px; border-radius: 6px; background: rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--text-muted);">No image</div>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px; font-family: var(--font-mono); font-size: 13px;">{{ violation.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td style="padding: 12px;">{{ violation.camera.name }}</td>
+                    <td style="padding: 12px; font-weight: 600; color: var(--danger);">{{ violation.violation_type }}</td>
+                    <td style="padding: 12px; font-family: var(--font-mono);">{{ "%.1f"|format(violation.confidence * 100) }}%</td>
+                    <td style="padding: 12px;">
+                        <a href="{{ url_for('violations_list') }}?search={{ violation.violation_type }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">Inspect</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="padding: 24px; text-align: center; color: var(--text-muted);">No safety violations logged today. Excellent hygiene!</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Injected analytics data from server routes
+    const weeklyLabels = {{ chart_data.weekly_labels|tojson }};
+    const weeklyViolations = {{ chart_data.weekly_violations|tojson }};
+    const complianceTrends = {{ chart_data.compliance_trends|tojson }};
+    const categoryLabels = {{ chart_data.category_labels|tojson }};
+    const categoryCounts = {{ chart_data.category_counts|tojson }};
+
+    // 1. Line + Bar Chart (Incident Trend & Compliance Index)
+    const ctxIncident = document.getElementById('incidentChart').getContext('2d');
+    new Chart(ctxIncident, {
+        type: 'bar',
+        data: {
+            labels: weeklyLabels,
+            datasets: [
+                {
+                    label: 'Violations Logged',
+                    data: weeklyViolations,
+                    backgroundColor: 'rgba(239, 68, 68, 0.75)',
+                    borderColor: '#ef4444',
+                    borderWidth: 1,
+                    yAxisID: 'y_violations',
+                    borderRadius: 6
+                },
+                {
+                    label: 'Compliance Index (%)',
+                    data: complianceTrends,
+                    type: 'line',
+                    borderColor: '#10b981',
+                    borderWidth: 3,
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    yAxisID: 'y_compliance'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#9ca3af', font: { family: 'Plus Jakarta Sans' } }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#9ca3af' }
+                },
+                y_violations: {
+                    type: 'linear',
+                    position: 'left',
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#9ca3af', stepSize: 1 }
+                },
+                y_compliance: {
+                    type: 'linear',
+                    position: 'right',
+                    min: 0,
+                    max: 100,
+                    grid: { drawOnChartArea: false },
+                    ticks: { color: '#9ca3af' }
+                }
+            }
+        }
+    });
+
+    // 2. Category Doughnut Chart
+    if (categoryCounts.length > 0 && categoryCounts.some(v => v > 0)) {
+        const ctxCategory = document.getElementById('categoryChart').getContext('2d');
+        new Chart(ctxCategory, {
+            type: 'doughnut',
+            data: {
+                labels: categoryLabels,
+                datasets: [{
+                    data: categoryCounts,
+                    backgroundColor: [
+                        '#f87171', // Helmet
+                        '#fbbf24', // Vest
+                        '#60a5fa', // Gloves
+                        '#34d399', // Mask
+                        '#f43f5e', // Fire
+                        '#fb7185'  // Smoke/Restricted
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: '#9ca3af', boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 11 } }
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+    } else {
+        document.getElementById('categoryChart').style.display = 'none';
+        document.getElementById('no-violations-msg').style.display = 'block';
+    }
+
+    // Refresh dashboard stats every 3 seconds
+    setInterval(async () => {
+        try {
+            const res = await fetch('/api/dashboard/stats');
+            const data = await res.json();
+            
+            document.getElementById('worker-count').textContent = data.worker_count;
+            document.getElementById('compliance-rate').textContent = data.compliance_rate.toFixed(1) + '%';
+            document.getElementById('violations-count').textContent = data.violations_today;
+        } catch(err) {
+            console.error('Failed to poll dashboard stats update:', err);
+        }
+    }, 3000);
+</script>
+{% endblock %}

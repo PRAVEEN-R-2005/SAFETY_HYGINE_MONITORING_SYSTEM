@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Safety & Hygiene AI System</title>
+    <!-- FontAwesome & Style -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: radial-gradient(circle at center, #111827 0%, #030712 100%);
+            margin: 0;
+            padding: 20px;
+        }
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        .login-logo {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            background: var(--primary);
+            color: white;
+            font-weight: 700;
+            font-size: 24px;
+            line-height: 50px;
+            margin: 0 auto 20px auto;
+            box-shadow: 0 0 20px var(--primary-glow);
+            font-family: var(--font-mono);
+        }
+        .error-banner {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 20px;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-logo">SH</div>
+        <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.5px;">Safety & Hygiene Portal</h2>
+        <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 30px;">Sign in to access real-time CCTV monitoring</p>
+
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            {% for message in messages %}
+              <div class="error-banner">
+                  <i class="fa-solid fa-circle-exclamation"></i>
+                  <span>{{ message }}</span>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <form action="{{ url_for('login') }}" method="POST" style="text-align: left;">
+            <div class="form-group">
+                <label class="form-label" for="username">Username</label>
+                <div style="position: relative;">
+                    <i class="fa-regular fa-user" style="position: absolute; left: 14px; top: 15px; color: var(--text-muted);"></i>
+                    <input class="form-input" style="padding-left: 40px;" type="text" id="username" name="username" required placeholder="Enter username">
+                </div>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 30px;">
+                <label class="form-label" for="password">Password</label>
+                <div style="position: relative;">
+                    <i class="fa-solid fa-lock" style="position: absolute; left: 14px; top: 15px; color: var(--text-muted);"></i>
+                    <input class="form-input" style="padding-left: 40px;" type="password" id="password" name="password" required placeholder="Enter password">
+                </div>
+            </div>
+
+            <button class="btn btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 15px; border-radius: 12px;" type="submit">
+                <span>Authenticate Session</span>
+                <i class="fa-solid fa-arrow-right-to-bracket"></i>
+            </button>
+        </form>
+        
+        <p style="font-size: 12px; color: var(--text-muted); margin-top: 30px;">
+            Default credentials: <b style="color: var(--text-secondary)">admin / admin123</b>
+        </p>
+    </div>
+</body>
+</html>

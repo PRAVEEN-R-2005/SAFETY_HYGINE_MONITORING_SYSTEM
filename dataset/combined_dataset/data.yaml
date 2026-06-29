@@ -1,0 +1,12 @@
+names:
+  0: Person
+  1: Helmet
+  2: Safety Vest
+  3: Gloves
+  4: Face Mask
+  5: Fire
+  6: Smoke
+path: C:\Users\acer\Desktop\Safety_Hygiene_Monitoring_System\dataset\combined_dataset
+test: test\images
+train: train\images
+val: valid\images

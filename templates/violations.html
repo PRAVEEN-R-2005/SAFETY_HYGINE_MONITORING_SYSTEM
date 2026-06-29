@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}Violations Log - Safety & Hygiene AI System{% endblock %}
+{% block header_title %}Safety Incidents Log{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-panel {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: flex-end;
+        background: var(--bg-surface);
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+    }
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0,0,0,0.8);
+        backdrop-filter: blur(8px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    .modal-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        max-width: 600px;
+        width: 90%;
+        padding: 28px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+        position: relative;
+    }
+    .close-btn {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        color: var(--text-muted);
+        background: transparent;
+        border: none;
+        font-size: 20px;
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Filtering controls -->
+<form class="filter-panel" method="GET" action="{{ url_for('violations_list') }}">
+    <div style="flex: 1; min-width: 200px;">
+        <label class="form-label" for="search">Text Search</label>
+        <input class="form-input" type="text" id="search" name="search" value="{{ request.args.get('search', '') }}" placeholder="Search type or camera...">
+    </div>
+    
+    <div style="width: 160px;">
+        <label class="form-label" for="camera_id">Camera Feed</label>
+        <select class="form-input" id="camera_id" name="camera_id">
+            <option value="">All Feeds</option>
+            {% for camera in cameras %}
+            <option value="{{ camera.id }}" {% if request.args.get('camera_id') == camera.id|string %}selected{% endif %}>{{ camera.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div style="width: 160px;">
+        <label class="form-label" for="type">Violation Type</label>
+        <select class="form-input" id="type" name="type">
+            <option value="">All Types</option>
+            <option value="No Helmet" {% if request.args.get('type') == 'No Helmet' %}selected{% endif %}>No Helmet</option>
+            <option value="No Vest" {% if request.args.get('type') == 'No Vest' %}selected{% endif %}>No Vest</option>
+            <option value="No Gloves" {% if request.args.get('type') == 'No Gloves' %}selected{% endif %}>No Gloves</option>
+            <option value="Unauthorized Access" {% if request.args.get('type') == 'Unauthorized Access' %}selected{% endif %}>Unauthorized Access</option>
+            <option value="Fire Alert" {% if request.args.get('type') == 'Fire Alert' %}selected{% endif %}>Fire Alert</option>
+            <option value="Smoke Alert" {% if request.args.get('type') == 'Smoke Alert' %}selected{% endif %}>Smoke Alert</option>
+        </select>
+    </div>
+
+    <div style="width: 140px;">
+        <label class="form-label" for="resolved">Status</label>
+        <select class="form-input" id="resolved" name="resolved">
+            <option value="">All Status</option>
+            <option value="0" {% if request.args.get('resolved') == '0' %}selected{% endif %}>Pending</option>
+            <option value="1" {% if request.args.get('resolved') == '1' %}selected{% endif %}>Resolved</option>
+        </select>
+    </div>
+
+    <div>
+        <button class="btn btn-primary" type="submit" style="padding: 11px 20px;">
+            <i class="fa-solid fa-filter"></i> Apply Filters
+        </button>
+    </div>
+</form>
+
+<!-- Grid layout of Violations -->
+<div class="panel">
+    <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-weight: 600;">
+                    <th style="padding: 14px 10px;">Thumbnail</th>
+                    <th style="padding: 14px 10px;">Timestamp</th>
+                    <th style="padding: 14px 10px;">Camera Location</th>
+                    <th style="padding: 14px 10px;">Incident Category</th>
+                    <th style="padding: 14px 10px;">Confidence</th>
+                    <th style="padding: 14px 10px;">Status</th>
+                    <th style="padding: 14px 10px; text-align: right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for violation in violations %}
+                <tr style="border-bottom: 1px solid var(--border-color); vertical-align: middle;">
+                    <td style="padding: 10px;">
+                        {% if violation.screenshot_path %}
+                        <img src="/static/screenshots/{{ violation.screenshot_path.split('/')[-1].split('\\')[-1] }}" style="width: 72px; height: 50px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-color); cursor: pointer;" onclick="openResolveModal('{{ violation.id }}', '/static/screenshots/{{ violation.screenshot_path.split('/')[-1].split('\\')[-1] }}', '{{ violation.violation_type }}', '{{ violation.camera.name }}', '{{ violation.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}', '{{ violation.resolved|tojson }}', '{{ violation.resolution_notes|default('')|e }}')">
+                        {% else %}
+                        <div style="width: 72px; height: 50px; border-radius: 8px; background: rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--text-muted);">No image</div>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 10px; font-family: var(--font-mono); font-size: 13px;">{{ violation.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td style="padding: 10px;">{{ violation.camera.name }} ({{ violation.camera.department or 'Workshop' }})</td>
+                    <td style="padding: 10px;">
+                        <span style="font-weight: 700; color: {% if violation.violation_type in ['Fire Alert', 'Smoke Alert'] %}var(--danger){% else %}#f87171{% endif %}">
+                            {{ violation.violation_type }}
+                        </span>
+                    </td>
+                    <td style="padding: 10px; font-family: var(--font-mono);">{{ "%.1f"|format(violation.confidence * 100) }}%</td>
+                    <td style="padding: 10px;">
+                        {% if violation.resolved %}
+                        <span class="badge badge-success">Resolved</span>
+                        {% else %}
+                        <span class="badge badge-danger">Pending</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 10px; text-align: right;">
+                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="openResolveModal('{{ violation.id }}', '/static/screenshots/{{ violation.screenshot_path.split('/')[-1].split('\\')[-1] if violation.screenshot_path else '' }}', '{{ violation.violation_type }}', '{{ violation.camera.name }}', '{{ violation.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}', '{{ violation.resolved|tojson }}', '{{ violation.resolution_notes|default('')|e }}')">
+                            Inspect
+                        </button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" style="padding: 40px; text-align: center; color: var(--text-muted);">
+                        <i class="fa-solid fa-clipboard-check" style="font-size: 32px; opacity: 0.3; display: block; margin-bottom: 10px;"></i>
+                        No safety violations found matching current filters.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal View & Resolution Panel -->
+<div class="modal-backdrop" id="resolve-modal">
+    <div class="modal-card">
+        <button class="close-btn" onclick="closeResolveModal()"><i class="fa-solid fa-xmark"></i></button>
+        <h3 id="modal-title" style="font-size: 18px; font-weight: 700; margin-bottom: 4px; color: var(--danger);">Violation Inspection</h3>
+        <p id="modal-subtitle" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 20px;">Camera details and timestamps</p>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div>
+                <img id="modal-img" src="" style="width: 100%; border-radius: 12px; border: 1px solid var(--border-color); object-fit: contain; aspect-ratio: 4/3; background: #000;" alt="Violation screenshot">
+            </div>
+            
+            <div style="display: flex; flex-direction: column; justify-content: space-between;">
+                <form id="resolution-form" method="POST" action="">
+                    <input type="hidden" id="violation-id" name="violation_id">
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label class="form-label" for="notes">Action Taken / Resolution Notes</label>
+                        <textarea class="form-input" id="notes" name="notes" rows="4" style="resize: none;" placeholder="Explain steps taken (e.g. Worker was issued a helmet)..." required></textarea>
+                    </div>
+                    
+                    <button class="btn btn-primary" type="submit" id="modal-submit-btn" style="width: 100%; justify-content: center; padding: 10px;">
+                        <i class="fa-solid fa-check"></i> Mark as Resolved
+                    </button>
+                </form>
+                
+                <div id="resolution-info" style="display: none; background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.15); border-radius: 10px; padding: 12px;">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--success); margin-bottom: 4px;">Resolution Notes:</h5>
+                    <p id="resolved-notes-text" style="font-size: 12px; color: var(--text-secondary); leading: 1.4"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function openResolveModal(id, imgSrc, type, camera, timestamp, resolved, notes) {
+        document.getElementById('violation-id').value = id;
+        document.getElementById('modal-title').textContent = type + " - Violation Captured";
+        document.getElementById('modal-subtitle').textContent = `Camera: ${camera} | Timestamp: ${timestamp}`;
+        
+        const modalImg = document.getElementById('modal-img');
+        if (imgSrc) {
+            modalImg.src = imgSrc;
+            modalImg.style.display = 'block';
+        } else {
+            modalImg.style.display = 'none';
+        }
+        
+        // Construct action post URL
+        document.getElementById('resolution-form').action = `/violation/${id}/resolve`;
+        
+        // Show/hide resolution form depending on current status
+        const isResolved = (resolved === true || resolved === 'true');
+        
+        if (isResolved) {
+            document.getElementById('resolution-form').style.display = 'none';
+            document.getElementById('resolution-info').style.display = 'block';
+            document.getElementById('resolved-notes-text').textContent = notes || "Resolved. No comments added.";
+        } else {
+            document.getElementById('resolution-form').style.display = 'block';
+            document.getElementById('notes').value = '';
+            document.getElementById('resolution-info').style.display = 'none';
+        }
+        
+        document.getElementById('resolve-modal').style.display = 'flex';
+    }
+
+    function closeResolveModal() {
+        document.getElementById('resolve-modal').style.display = 'none';
+    }
+
+    // Close modal on click outside content card
+    document.getElementById('resolve-modal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeResolveModal();
+        }
+    });
+</script>
+{% endblock %}

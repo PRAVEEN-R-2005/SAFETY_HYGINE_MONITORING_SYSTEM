@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Cameras - Safety & Hygiene AI System{% endblock %}
+{% block header_title %}Camera Feed Registrations{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid" style="grid-template-columns: 2fr 1fr; gap: 24px; align-items: flex-start;">
+    <!-- Active Camera List -->
+    <div class="panel">
+        <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 20px;">Registered CCTV & Camera Feeds</h3>
+        
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-weight: 600;">
+                        <th style="padding: 12px;">ID</th>
+                        <th style="padding: 12px;">Camera Name</th>
+                        <th style="padding: 12px;">Stream Location / URL</th>
+                        <th style="padding: 12px;">Department</th>
+                        <th style="padding: 12px;">Status</th>
+                        <th style="padding: 12px; text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for camera in cameras %}
+                    <tr style="border-bottom: 1px solid var(--border-color); vertical-align: middle;">
+                        <td style="padding: 12px; font-family: var(--font-mono);">{{ camera.id }}</td>
+                        <td style="padding: 12px; font-weight: 600;">{{ camera.name }}</td>
+                        <td style="padding: 12px; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            {{ camera.stream_url }}
+                        </td>
+                        <td style="padding: 12px;">{{ camera.department or 'General' }}</td>
+                        <td style="padding: 12px;">
+                            {% if camera.status == 'active' %}
+                            <span class="badge badge-success">Active</span>
+                            {% else %}
+                            <span class="badge badge-secondary" style="background: rgba(255,255,255,0.05); color: var(--text-muted);">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 12px; text-align: right; display: flex; justify-content: flex-end; gap: 8px;">
+                            <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 12px;" onclick="populateEditForm('{{ camera.id }}', '{{ camera.name }}', '{{ camera.stream_url }}', '{{ camera.department or '' }}', '{{ camera.status }}')">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
+                            <form action="{{ url_for('delete_camera', camera_id=camera.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this camera feed and its associated alerts history?');">
+                                <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 12px; color: var(--danger);" type="submit">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" style="padding: 30px; text-align: center; color: var(--text-muted);">No cameras registered yet. Add one on the right or use the "Simulation" mode on the Live screen.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Registration Panel -->
+    <div class="panel">
+        <h3 id="form-title" style="font-size: 16px; font-weight: 700; margin-bottom: 20px;">Add New Camera Stream</h3>
+        
+        <form id="camera-form" method="POST" action="{{ url_for('cameras_list') }}">
+            <input type="hidden" id="camera-id" name="camera_id">
+            
+            <div class="form-group">
+                <label class="form-label" for="name">Camera Nickname</label>
+                <input class="form-input" type="text" id="name" name="name" required placeholder="e.g. Assembly Line A1">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="stream_url">Stream Input Source / RTSP URL</label>
+                <input class="form-input" type="text" id="stream_url" name="stream_url" required placeholder="0 (Webcam), RTSP URL, or file path">
+                <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px; leading: 1.3">
+                    Use <b>0</b> for local webcam. Use RTSP path for CCTV feeds, or absolute path to a local MP4 file.
+                </span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="department">Facility Department</label>
+                <input class="form-input" type="text" id="department" name="department" placeholder="e.g. Fabrication, Shipping">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="status">Operating Status</label>
+                <select class="form-input" id="status" name="status">
+                    <option value="active">Active Monitoring</option>
+                    <option value="inactive">Inactive / Standby</option>
+                </select>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 25px;">
+                <button class="btn btn-primary" type="submit" id="submit-btn" style="flex: 1; justify-content: center;">
+                    <i class="fa-solid fa-plus"></i> Register Feed
+                </button>
+                <button class="btn btn-secondary" type="button" id="cancel-btn" style="display: none;" onclick="resetForm()">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function populateEditForm(id, name, streamUrl, department, status) {
+        document.getElementById('camera-id').value = id;
+        document.getElementById('name').value = name;
+        document.getElementById('stream_url').value = streamUrl;
+        document.getElementById('department').value = department;
+        document.getElementById('status').value = status;
+        
+        document.getElementById('form-title').textContent = "Modify Camera #" + id;
+        document.getElementById('submit-btn').innerHTML = '<i class="fa-solid fa-check"></i> Save Changes';
+        document.getElementById('cancel-btn').style.display = 'inline-flex';
+        
+        // Point action to edit path
+        document.getElementById('camera-form').action = "/camera/" + id + "/edit";
+    }
+
+    function resetForm() {
+        document.getElementById('camera-id').value = '';
+        document.getElementById('name').value = '';
+        document.getElementById('stream_url').value = '';
+        document.getElementById('department').value = '';
+        document.getElementById('status').value = 'active';
+        
+        document.getElementById('form-title').textContent = "Add New Camera Stream";
+        document.getElementById('submit-btn').innerHTML = '<i class="fa-solid fa-plus"></i> Register Feed';
+        document.getElementById('cancel-btn').style.display = 'none';
+        
+        document.getElementById('camera-form').action = "{{ url_for('cameras_list') }}";
+    }
+</script>
+{% endblock %}

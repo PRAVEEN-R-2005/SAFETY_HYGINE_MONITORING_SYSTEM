@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block title %}Live Monitoring - Safety & Hygiene AI System{% endblock %}
+{% block header_title %}CCTV Video Streams{% endblock %}
+
+{% block extra_css %}
+<style>
+    .control-pane {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+    }
+    .video-viewport {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+        max-width: 720px;
+        background: #000;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 2px solid var(--border-color);
+        box-shadow: 0 20px 40px -15px rgba(0,0,0,0.6);
+    }
+    #stream-img {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+    .drawing-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        cursor: crosshair;
+    }
+    .status-badge-active {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--success);
+        display: inline-block;
+        animation: pulse 1.5s infinite;
+        margin-right: 6px;
+    }
+    @keyframes pulse {
+        0% { transform: scale(0.9); opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+        70% { transform: scale(1.1); opacity: 0.8; box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+        100% { transform: scale(0.9); opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="stream-container">
+    <div>
+        <div class="control-pane">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <select class="form-input" id="camera-selector" style="width: 240px; margin-bottom: 0;" onchange="switchCamera(this.value)">
+                    {% for camera in cameras %}
+                    <option value="{{ camera.id }}">{{ camera.name }} ({{ camera.department or 'Workshop' }})</option>
+                    {% else %}
+                    <option value="simulation">Simulated Workspace Feed</option>
+                    {% endfor %}
+                </select>
+                <div style="display: flex; align-items: center; font-size: 13px; color: var(--text-secondary)">
+                    <span class="status-badge-active"></span>
+                    <span>Guard Active</span>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary" onclick="clearPolygon()" style="padding: 8px 14px;">
+                    <i class="fa-solid fa-eraser"></i> Clear Zone
+                </button>
+                <button class="btn btn-primary" onclick="savePolygon()" style="padding: 8px 14px;">
+                    <i class="fa-solid fa-floppy-disk"></i> Save Restricted Zone
+                </button>
+            </div>
+        </div>
+
+        <!-- Video & Canvas Overlay -->
+        <div class="video-viewport" id="viewport">
+            <img id="stream-img" src="" alt="Camera Feed Stream">
+            <svg class="drawing-overlay" id="svg-overlay" xmlns="http://www.w3.org/2000/svg">
+                <!-- SVG elements will be drawn dynamically -->
+                <polygon id="svg-poly" points="" style="fill:rgba(239, 68, 68, 0.25); stroke:#ef4444; stroke-width:3" />
+                <g id="svg-points"></g>
+            </svg>
+        </div>
+        
+        <div class="panel" style="margin-top: 20px; padding: 15px;">
+            <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 8px;"><i class="fa-solid fa-circle-info" style="color: var(--primary)"></i> Instructions: Restricted Area Drawing</h4>
+            <p style="font-size: 12px; color: var(--text-secondary); leading: 1.5">
+                Click directly on the camera feed viewport above to mark the corners of your restricted hazard zone (e.g., surrounding moving mechanical robotic arms). The system will automatically construct the boundaries. Workers entering this zone will immediately trigger an <b>Unauthorized Access</b> violation alarm.
+            </p>
+        </div>
+    </div>
+
+    <!-- Warnings Terminal Pane -->
+    <div class="panel" style="margin-bottom: 0; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
+            <h3 style="font-size: 15px; font-weight: 700; color: var(--text-primary)"><i class="fa-solid fa-bell" style="color: var(--danger)"></i> Feed Warnings Stream</h3>
+            <button class="btn btn-secondary" onclick="clearTerminal()" style="padding: 4px 8px; font-size: 11px;">Clear</button>
+        </div>
+        
+        <div class="alerts-panel" id="terminal-alerts">
+            <!-- Warnings items slide in here -->
+            <div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 40px 0;" id="empty-term-msg">
+                <i class="fa-solid fa-shield" style="font-size: 32px; display: block; margin-bottom: 10px; opacity: 0.3;"></i>
+                No active threats detected.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentCamId = null;
+    let polygonPoints = []; // Stores actual points as object: {x: %, y: %}
+    
+    window.onload = function() {
+        const selector = document.getElementById('camera-selector');
+        if (selector && selector.options.length > 0) {
+            switchCamera(selector.value);
+        } else {
+            switchCamera('simulation');
+        }
+        setupDrawing();
+    };
+
+    function switchCamera(camId) {
+        currentCamId = camId;
+        const img = document.getElementById('stream-img');
+        
+        // Update stream src to point to appropriate route
+        if (camId === 'simulation') {
+            img.src = "{{ url_for('camera_feed', camera_id='simulation') }}";
+        } else {
+            img.src = "/camera_feed/" + camId;
+        }
+        
+        // Clear SVG elements on switch
+        clearPolygon();
+        
+        // Fetch current restricted area coordinates if camera exists
+        if (camId !== 'simulation') {
+            fetch('/api/camera/' + camId + '/restricted-area')
+                .then(res => res.json())
+                .then(points => {
+                    if (points && points.length > 0) {
+                        polygonPoints = points.map(pt => ({x: pt[0], y: pt[1]}));
+                        renderPolygon();
+                    }
+                })
+                .catch(err => console.log('Error fetching restricted coordinates:', err));
+        }
+    }
+
+    // Interactive Polygon Drawing
+    function setupDrawing() {
+        const overlay = document.getElementById('svg-overlay');
+        const viewport = document.getElementById('viewport');
+
+        overlay.addEventListener('click', function(e) {
+            // Get bounding rect of SVG
+            const rect = overlay.getBoundingClientRect();
+            
+            // Calculate normalized position relative to width/height (0.0 to 1.0)
+            const clickX = (e.clientX - rect.left) / rect.width;
+            const clickY = (e.clientY - rect.top) / rect.height;
+
+            polygonPoints.push({ x: clickX, y: clickY });
+            renderPolygon();
+        });
+    }
+
+    function renderPolygon() {
+        const overlay = document.getElementById('svg-overlay');
+        const poly = document.getElementById('svg-poly');
+        const pointsGroup = document.getElementById('svg-points');
+        const rect = overlay.getBoundingClientRect();
+        
+        // Clear points rendering
+        pointsGroup.innerHTML = '';
+        
+        if (polygonPoints.length === 0) {
+            poly.setAttribute('points', '');
+            return;
+        }
+
+        // Draw points and construct polygon string
+        let pointsString = '';
+        
+        polygonPoints.forEach((pt, index) => {
+            // Convert back to absolute pixels for SVG displaying
+            const px = pt.x * rect.width;
+            const py = pt.y * rect.height;
+            
+            pointsString += `${px},${py} `;
+            
+            // Draw circle vertices
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', px);
+            circle.setAttribute('cy', py);
+            circle.setAttribute('r', '5');
+            circle.setAttribute('style', 'fill:#3b82f6; stroke:#fff; stroke-width:1.5; cursor:pointer');
+            
+            // Text order labels
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', px + 8);
+            text.setAttribute('y', py + 4);
+            text.setAttribute('style', 'fill:#fff; font-size:10px; font-family:sans-serif; font-weight:bold');
+            text.textContent = index + 1;
+            
+            pointsGroup.appendChild(circle);
+            pointsGroup.appendChild(text);
+        });
+
+        poly.setAttribute('points', pointsString.trim());
+    }
+
+    // Resize listener to redraw SVG items scaling correctly
+    window.addEventListener('resize', () => {
+        if (polygonPoints.length > 0) {
+            renderPolygon();
+        }
+    });
+
+    function clearPolygon() {
+        polygonPoints = [];
+        renderPolygon();
+    }
+
+    function savePolygon() {
+        if (currentCamId === 'simulation') {
+            alert("Restricted area drawing is only applicable for registered cameras, not simulated feeds.");
+            return;
+        }
+        
+        if (polygonPoints.length > 0 && polygonPoints.length < 3) {
+            alert("A polygon restricted zone must have at least 3 points.");
+            return;
+        }
+
+        // Convert back to [[x, y], ...] shape
+        const apiPayload = polygonPoints.map(pt => [pt.x, pt.y]);
+
+        fetch('/api/camera/' + currentCamId + '/restricted-area', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ coordinates: apiPayload })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert("Restricted zone coordinates saved successfully!");
+            } else {
+                alert("Failed to save coordinates: " + data.message);
+            }
+        })
+        .catch(err => alert("Error communicating with safety API: " + err));
+    }
+
+    function clearTerminal() {
+        const terminal = document.getElementById('terminal-alerts');
+        terminal.innerHTML = `
+            <div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 40px 0;" id="empty-term-msg">
+                <i class="fa-solid fa-shield" style="font-size: 32px; display: block; margin-bottom: 10px; opacity: 0.3;"></i>
+                No active threats detected.
+            </div>
+        `;
+    }
+
+    // Local subscription to event pipeline to fill the feed warnings column
+    const localSse = new EventSource('/api/alerts/stream');
+    localSse.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            
+            // Check if alert corresponds to the current selected camera
+            // (If current selected is simulation, show all)
+            if (currentCamId !== 'simulation' && data.camera_name.indexOf(document.getElementById('camera-selector').selectedOptions[0].text.split(' (')[0]) === -1) {
+                return;
+            }
+            
+            // Hide empty message
+            const emptyMsg = document.getElementById('empty-term-msg');
+            if (emptyMsg) emptyMsg.remove();
+            
+            const term = document.getElementById('terminal-alerts');
+            const alertCard = document.createElement('div');
+            alertCard.className = 'panel alert-popup';
+            alertCard.style.padding = '12px';
+            alertCard.style.marginBottom = '8px';
+            alertCard.style.fontSize = '12px';
+            
+            let imgTag = '';
+            if (data.screenshot_url) {
+                imgTag = `<img src="${data.screenshot_url}" style="width: 100%; height: 90px; border-radius: 6px; object-fit: cover; margin-top: 8px; border: 1px solid var(--border-color);" />`;
+            }
+            
+            alertCard.innerHTML = `
+                <div style="display:flex; justify-content:space-between; font-weight:700">
+                    <span style="color:var(--danger)"><i class="fa-solid fa-circle-exclamation"></i> ${data.violation_type}</span>
+                    <span style="color:var(--text-muted)">${data.timestamp.split(' ')[1]}</span>
+                </div>
+                <div style="margin-top:4px; color:var(--text-secondary)">Camera: <b>${data.camera_name}</b></div>
+                <div style="font-size:11px; color:#fbbf24; margin-top:2px;">Confidence: ${(data.confidence * 100).toFixed(1)}%</div>
+                ${imgTag}
+            `;
+            
+            term.insertBefore(alertCard, term.firstChild);
+            
+            // Limit terminal list elements to 10
+            if (term.children.length > 10) {
+                term.removeChild(term.lastChild);
+            }
+        } catch(err) {
+            console.error('Error feeding terminal warnings:', err);
+        }
+    };
+</script>
+{% endblock %}

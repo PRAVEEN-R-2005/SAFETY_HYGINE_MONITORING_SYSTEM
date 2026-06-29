@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - Safety & Hygiene AI System{% endblock %}
+{% block header_title %}Safety & Compliance Reports{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid" style="grid-template-columns: 1fr 2fr; gap: 24px; align-items: flex-start;">
+    <!-- Report Generator Console -->
+    <div class="panel">
+        <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 20px;">Generate Safety Report</h3>
+        
+        <form method="POST" action="{{ url_for('reports_view') }}">
+            <div class="form-group">
+                <label class="form-label" for="report_type">File Format Type</label>
+                <select class="form-input" id="report_type" name="report_type">
+                    <option value="PDF">PDF Document (Includes Evidence Prints)</option>
+                    <option value="Excel">Excel Worksheet (Detailed Structured Rows)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="start_date">Range Start Date</label>
+                <input class="form-input" type="date" id="start_date" name="start_date" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="end_date">Range End Date</label>
+                <input class="form-input" type="date" id="end_date" name="end_date" required>
+            </div>
+
+            <button class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 20px;" type="submit">
+                <i class="fa-solid fa-gears"></i> Compile Report File
+            </button>
+        </form>
+    </div>
+
+    <!-- Generated Reports Logs -->
+    <div class="panel">
+        <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 20px;">Report Generation History</h3>
+        
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-weight: 600;">
+                        <th style="padding: 12px;">Compiled At</th>
+                        <th style="padding: 12px;">Format</th>
+                        <th style="padding: 12px;">Period Scope</th>
+                        <th style="padding: 12px;">Status</th>
+                        <th style="padding: 12px; text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for report in reports %}
+                    <tr style="border-bottom: 1px solid var(--border-color); vertical-align: middle;">
+                        <td style="padding: 12px; font-family: var(--font-mono); font-size: 13px;">
+                            {{ report.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        </td>
+                        <td style="padding: 12px;">
+                            <span class="badge {% if report.report_type == 'PDF' %}badge-danger{% else %}badge-success{% endif %}" style="border-radius: 4px;">
+                                {{ report.report_type }}
+                            </span>
+                        </td>
+                        <td style="padding: 12px; font-size: 12px; color: var(--text-secondary);">
+                            {{ report.start_date.strftime('%b %d, %Y') }} - {{ report.end_date.strftime('%b %d, %Y') }}
+                        </td>
+                        <td style="padding: 12px;">
+                            {% if report.status == 'completed' %}
+                            <span class="badge badge-success" style="font-size: 10px; padding: 4px 8px;">Ready</span>
+                            {% else %}
+                            <span class="badge badge-danger" style="font-size: 10px; padding: 4px 8px;">Failed</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 12px; text-align: right;">
+                            {% if report.status == 'completed' %}
+                            <a href="/download-report/{{ report.id }}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">
+                                <i class="fa-solid fa-download"></i> Download
+                            </a>
+                            {% else %}
+                            <span style="color: var(--text-muted); font-size: 12px;">Unavailable</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" style="padding: 30px; text-align: center; color: var(--text-muted);">
+                            <i class="fa-solid fa-file-excel" style="font-size: 32px; opacity: 0.3; display: block; margin-bottom: 10px;"></i>
+                            No reports have been compiled yet. Use the console on the left.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Autofill default dates (Start date: 7 days ago, End date: today)
+    window.onload = function() {
+        const today = new Date();
+        const lastWeek = new Date();
+        lastWeek.setDate(today.getDate() - 7);
+
+        document.getElementById('start_date').value = lastWeek.toISOString().split('T')[0];
+        document.getElementById('end_date').value = today.toISOString().split('T')[0];
+    };
+</script>
+{% endblock %}
